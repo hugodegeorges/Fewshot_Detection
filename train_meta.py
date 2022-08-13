@@ -134,6 +134,7 @@ elif cfg.neg_ratio == 5:
 print('factor:', factor)
 learning_rate /= factor
 
+
 if use_cuda:
     if ngpus > 1:
         model = torch.nn.DataParallel(model).cuda()
@@ -321,6 +322,6 @@ if evaluate:
     logging('evaluating ...')
     test(0)
 else:
-    for epoch in range(init_epoch, max_epochs):
+    for epoch in range(int(init_epoch), int(max_epochs)):
         train(epoch)
         # test(epoch)

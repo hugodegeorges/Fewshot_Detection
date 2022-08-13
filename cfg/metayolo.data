@@ -10,4 +10,4 @@ meta = data/voc_traindict_full.txt
 train = //content/DATA_FOLDER/voc_train.txt
 valid = //content/DATA_FOLDER/2007_test.txt
 backup = backup/metayolo
-gpus=1,2,3,4
+gpus=0
