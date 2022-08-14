@@ -6,7 +6,7 @@
 
 import xml.etree.ElementTree as ET
 import os,sys
-import cPickle
+import pickle
 import numpy as np
 import argparse
 from os import path
@@ -22,7 +22,7 @@ def get_id(s):
 
 def get_novels(root, id=None):
     if root.endswith('txt'):
-        if id == 'None':
+        if id == None:
             return []
         with open(root, 'r') as f:
             novels = f.readlines()
@@ -106,9 +106,7 @@ def voc_eval(detpath,
                                 classname,
                                 [ovthresh],
                                 [use_07_metric])
-
     Top level function that does the PASCAL VOC evaluation.
-
     detpath: Path to detections
         detpath.format(classname) should produce the detection results file.
     annopath: Path to annotations
@@ -140,16 +138,17 @@ def voc_eval(detpath,
         for i, imagename in enumerate(imagenames):
             recs[imagename] = parse_rec(annopath.format(imagename))
             if i % 100 == 0:
-                print 'Reading annotation for {:d}/{:d}'.format(
-                    i + 1, len(imagenames))
+                print('Reading annotation for {:d}/{:d}'.format(
+                    i + 1, len(imagenames)))
         # save
-        print 'Saving cached annotations to {:s}'.format(cachefile)
-        with open(cachefile, 'w') as f:
-            cPickle.dump(recs, f)
+        print('Saving cached annotations to {:s}'.format(cachefile))
+        with open(cachefile, 'wb') as f:
+            pickle.dump(recs, f)
     else:
         # load
-        with open(cachefile, 'r') as f:
-            recs = cPickle.load(f)
+        print("About to pickle.load: %s" % cachefile)
+        with open(cachefile, 'rb') as f:
+            recs = pickle.load(f)
 
     # extract gt objects for this class
     class_recs = {}
@@ -243,9 +242,10 @@ def voc_eval(detpath,
     
 
 
-def _do_python_eval(res_prefix, novel=False, output_dir = 'output'):
+def _do_python_eval(res_prefix, droot, novel=False, output_dir = 'output'):
     # _devkit_path = '/data2/bykang/pytorch-yolo2/VOCdevkit'
-    _devkit_path = '/tmp_scratch/basilisk/bykang/datasets/VOCdevkit'
+    #_devkit_path = '/tmp_scratch/basilisk/bykang/datasets/VOCdevkit'
+    _devkit_path = os.path.join(droot, 'VOCdevkit')
     _year = '2007'
     _classes = ('__background__', # always index 0
         'aeroplane', 'bicycle', 'bird', 'boat',
@@ -279,7 +279,7 @@ def _do_python_eval(res_prefix, novel=False, output_dir = 'output'):
     base_aps = []
     # The PASCAL VOC metric changed in 2010
     use_07_metric = True if int(_year) < 2010 else False
-    print 'VOC07 metric? ' + ('Yes' if use_07_metric else 'No')
+    print('VOC07 metric? ' + ('Yes' if use_07_metric else 'No'))
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
     for i, cls in enumerate(_classes):
@@ -303,8 +303,9 @@ def _do_python_eval(res_prefix, novel=False, output_dir = 'output'):
         # print(rec)
         # print(prec)
 
-        with open(os.path.join(output_dir, cls + '_pr.pkl'), 'w') as f:
-            cPickle.dump({'rec': rec, 'prec': prec, 'ap': ap}, f)
+        # I think this is unused?
+        #with open(os.path.join(output_dir, cls + '_pr.pkl'), 'w') as f:
+        #    pickle.dump({'rec': rec, 'prec': prec, 'ap': ap}, f)
     print('~~~~~~~~')
     print('Mean AP = {:.4f}'.format(np.mean(aps)))
     if novel:
@@ -335,11 +336,11 @@ if __name__ == '__main__':
     #res_prefix = '/data/hongji/darknet/project/voc/results/comp4_det_test_'  
     parser = argparse.ArgumentParser()
     parser.add_argument('res_prefix', type=str)
+    # TODO - use a temporary scratch dir instead of droot??
+    #parser.add_argument('droot', type=str)  
     parser.add_argument('--novel', action='store_true')
     parser.add_argument('--single', action='store_true')  
     args = parser.parse_args()
     args.novel = True
     print(args.res_prefix)
-    _do_python_eval(args.res_prefix, novel=args.novel, output_dir = 'output')
-
-
+    _do_python_eval(args.res_prefix, '//content/DATA_FOLDER', novel=args.novel, output_dir = 'output')
