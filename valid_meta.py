@@ -32,6 +32,7 @@ def valid(datacfg, darknetcfg, learnetcfg, weightfile, outfile):
     m.load_weights(weightfile)
     m.cuda()
     m.eval()
+    torch.set_grad_enabled(False)
 
     valid_dataset = dataset.listDataset(valid_images, shape=(m.width, m.height),
                        shuffle=False,
@@ -74,9 +75,9 @@ def valid(datacfg, darknetcfg, learnetcfg, weightfile, outfile):
         data = data.cuda()
         mask = mask.cuda()
         metax = metax.cuda()
-        data = Variable(data, volatile = True)
-        mask = Variable(mask, volatile = True)
-        metax = Variable(metax, volatile = True)
+        data = Variable(data)
+        mask = Variable(mask)
+        metax = Variable(metax)
         output = m(data, metax, mask)
 
         if isinstance(output, tuple):

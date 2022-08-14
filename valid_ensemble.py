@@ -8,7 +8,7 @@ from cfg import cfg
 from cfg import parse_cfg
 import os
 import pdb
-
+from icecream import ic
 
 def valid(datacfg, darknetcfg, learnetcfg, weightfile, outfile, use_baserw=False):
     options = read_data_cfg(datacfg)
@@ -33,6 +33,7 @@ def valid(datacfg, darknetcfg, learnetcfg, weightfile, outfile, use_baserw=False
     m.load_weights(weightfile)
     m.cuda()
     m.eval()
+    torch.set_grad_enabled(False)
 
     valid_dataset = dataset.listDataset(valid_images, shape=(m.width, m.height),
                        shuffle=False,
@@ -46,83 +47,46 @@ def valid(datacfg, darknetcfg, learnetcfg, weightfile, outfile, use_baserw=False
     valid_loader = torch.utils.data.DataLoader(
         valid_dataset, batch_size=valid_batchsize, shuffle=False, **kwargs) 
 
+    batch_size = 64
+    metaset = dataset.MetaDataset(metafiles=metadict, train=False, ensemble=True, with_ids=True)
+    metaloader = torch.utils.data.DataLoader(
+        metaset,
+        batch_size=batch_size,
+        shuffle=False,
+        **kwargs
+    )
+    # metaloader = iter(metaloader)
+    n_cls = len(metaset.classes)
 
-    if False:
-        metaset = dataset.MetaDataset(metafiles=metadict, train=False, ensemble=True)
-        metaloader = torch.utils.data.DataLoader(
-            metaset,
-            batch_size=len(metaset),
-            shuffle=False,
-            **kwargs
-        )
-        metaloader = iter(metaloader)
-        n_cls = len(metaset.classes)
-
-        print('===> Generating dynamic weights...')
-        metax, mask = metaloader.next()
+    enews = [0.0] * n_cls
+    cnt = [0.0] * n_cls
+    print('===> Generating dynamic weights...')
+    kkk = 0
+    for metax, mask, clsids in metaloader:
+        if kkk % 10 == 0:
+            print('===> {}/{}'.format(kkk, len(metaset) // batch_size))
+        kkk += 1
         metax, mask = metax.cuda(), mask.cuda()
-        metax, mask = Variable(metax, volatile=True), Variable(mask, volatile=True)
-        dynamic_weights = m.meta_forward(metax, mask)
+        metax, mask = Variable(metax), Variable(mask)
+        dws = m.meta_forward(metax, mask)
+        dw = dws[0]
+        for ci, c in enumerate(clsids):
+            enews[c] = enews[c] * cnt[c] / (cnt[c] + 1) + dw[ci] / (cnt[c] + 1)
+            cnt[c] += 1
+    dynamic_weights = [torch.stack(enews)]
 
-        for i in range(len(dynamic_weights)):
-            assert dynamic_weights[i].size(0) == sum(metaset.meta_cnts)
-            inds = np.cumsum([0] + metaset.meta_cnts)
-            new_weight = []
-            for j in range(len(metaset.meta_cnts)):
-                new_weight.append(torch.mean(dynamic_weights[i][inds[j]:inds[j+1]], dim=0))
-            dynamic_weights[i] = torch.stack(new_weight)
-            print(dynamic_weights[i].shape)
-    else:
-        metaset = dataset.MetaDataset(metafiles=metadict, train=False, ensemble=True, with_ids=True)
-        metaloader = torch.utils.data.DataLoader(
-            metaset,
-            batch_size=64,
-            shuffle=False,
-            **kwargs
-        )
-        # metaloader = iter(metaloader)
-        n_cls = len(metaset.classes)
-
-        enews = [0.0] * n_cls
-        cnt = [0.0] * n_cls
-        print('===> Generating dynamic weights...')
-        kkk = 0
-        for metax, mask, clsids in metaloader:
-            print('===> {}/{}'.format(kkk, len(metaset) // 64))
-            kkk += 1
-            metax, mask = metax.cuda(), mask.cuda()
-            metax, mask = Variable(metax, volatile=True), Variable(mask, volatile=True)
-            dws = m.meta_forward(metax, mask)
-            dw = dws[0]
-            for ci, c in enumerate(clsids):
-                enews[c] = enews[c] * cnt[c] / (cnt[c] + 1) + dw[ci] / (cnt[c] + 1)
-                cnt[c] += 1
-        dynamic_weights = [torch.stack(enews)]
-
-        # import pickle
-        # with open('data/rws/voc_novel2_.pkl', 'wb') as f:
-        #     tmp = [x.data.cpu().numpy() for x in dynamic_weights]
-        #     pickle.dump(tmp, f)
-        # import pdb; pdb.set_trace()
-
-        if use_baserw:
-            import pickle
-            # f = 'data/rws/voc_novel{}_.pkl'.format(cfg.novelid)
-            f = 'data/rws/voc_novel{}_.pkl'.format(0)
-            print('===> Loading from {}...'.format(f))
-            with open(f, 'rb') as f:
-            # with open('data/rws/voc_novel0_.pkl', 'rb') as f:
-                rws = pickle.load(f)
-                rws = [Variable(torch.from_numpy(rw)).cuda() for rw in rws]
-                tki = cfg._real_base_ids
-                for i in range(len(rws)):
-                    dynamic_weights[i][tki] = rws[i][tki]
-                    # dynamic_weights[i] = rws[i]
-            # pdb.set_trace()
-
+    if use_baserw:
+        import pickle
+        f = 'data/rws/voc_novel{}_.pkl'.format(0)
+        print('===> Loading from {}...'.format(f))
+        with open(f, 'rb') as f:
+            rws = pickle.load(f)
+            rws = [Variable(torch.from_numpy(rw)).cuda() for rw in rws]
+            tki = cfg._real_base_ids
+            for i in range(len(rws)):
+                dynamic_weights[i][tki] = rws[i][tki]
 
     if not os.path.exists(prefix):
-        # os.mkdir(prefix)
         os.makedirs(prefix)
 
     fps = [0]*n_cls
@@ -136,7 +100,7 @@ def valid(datacfg, darknetcfg, learnetcfg, weightfile, outfile, use_baserw=False
     nms_thresh = 0.45
     for batch_idx, (data, target) in enumerate(valid_loader):
         data = data.cuda()
-        data = Variable(data, volatile = True)
+        data = Variable(data)
         output = m.detect_forward(data, dynamic_weights)
 
         if isinstance(output, tuple):
@@ -171,7 +135,7 @@ def valid(datacfg, darknetcfg, learnetcfg, weightfile, outfile, use_baserw=False
                     y2 = (box[1] + box[3]/2.0) * height
 
                     det_conf = box[4]
-                    for j in range((len(box)-5)/2):
+                    for j in range((len(box)-5)//2):
                         cls_conf = box[5+2*j]
                         cls_id = box[6+2*j]
                         prob =det_conf * cls_conf

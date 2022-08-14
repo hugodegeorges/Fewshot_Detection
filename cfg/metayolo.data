@@ -11,3 +11,5 @@ train = //content/DATA_FOLDER/voc_train.txt
 valid = //content/DATA_FOLDER/2007_test.txt
 backup = backup/metayolo
 gpus=0
+tune=0
+num_workers=10
