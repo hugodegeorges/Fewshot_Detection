@@ -14,4 +14,4 @@ train = //content/DATA_FOLDER/voc_train.txt
 meta = data/voc_traindict_bbox_10shot.txt
 valid = //content/DATA_FOLDER/2007_test.txt
 backup = backup/metatunetest1
-gpus  = 1,2,3,4
+gpus  = 0
