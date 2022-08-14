@@ -8,7 +8,6 @@ from cfg import cfg
 from cfg import parse_cfg
 import os
 import pdb
-from icecream import ic
 
 def valid(datacfg, darknetcfg, learnetcfg, weightfile, outfile, use_baserw=False):
     options = read_data_cfg(datacfg)
