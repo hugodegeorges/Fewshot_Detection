@@ -198,7 +198,7 @@ def train(epoch):
         num_workers=num_workers,
         pin_memory=True
     )
-    metaloader = iter(metaloader)
+    batch_iterator = iter(metaloader)
 
     lr = adjust_learning_rate(optimizer, processed_batches)
     logging('epoch %d/%d, processed %d samples, lr %.8f' % (epoch, max_epochs, epoch * len(train_loader.dataset), lr))
@@ -220,7 +220,11 @@ def train(epoch):
     optimizer.zero_grad()
     for batch_idx, (data, target) in enumerate(train_loader):
         #ic("iter")
-        metax, mask = metaloader.next()
+        try:
+          metax, mask = batch_iterator.next()
+        except StopIteration:
+          batch_iterator = iter(metaloader)
+          metax, mask = batch_iterator.next()
         t2 = time.time()
         adjust_learning_rate(optimizer, processed_batches)
         if (batch_idx+1) % accumulate_step == 0:
